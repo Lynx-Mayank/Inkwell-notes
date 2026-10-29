@@ -1,0 +1,431 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="light">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>MyNotes</title>
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/turndown/dist/turndown.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/turndown-plugin-gfm/dist/turndown-plugin-gfm.js"></script>
+<style>
+  :root {
+    --bg: #ffffff; --side: #f7f6f3; --text: #37352f; --muted: #9b9a97; --border: #e9e9e7;
+    --hover: #efefed; --active: #e3e2de; --accent: #2383e2; --danger: #e03e3e;
+    --quote: #555; --icode-bg: #f1f0ee; --icode-color: #c7254e;
+    --code-bg: #1e1e2e; --code-color: #a6e3a1; --code-font: "Fira Code", Consolas, "Courier New", monospace;
+    color-scheme: light;
+  }
+  :root[data-theme="dark"] {
+    --bg: #191919; --side: #202020; --text: #e6e6e4; --muted: #8b8b88; --border: #333;
+    --hover: #2c2c2c; --active: #353535; --accent: #4aa3ff; --danger: #ff6b6b;
+    --quote: #b5b5b2; --icode-bg: #333; --icode-color: #ff8fab;
+    color-scheme: dark;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; height: 100vh; display: flex; font-family: -apple-system, "Segoe UI", Roboto, sans-serif; color: var(--text); background: var(--bg); transition: background .2s, color .2s; }
+
+  /* Sidebar */
+  #sidebar { width: 260px; background: var(--side); border-right: 1px solid var(--border); display: flex; flex-direction: column; padding: 12px; gap: 8px; }
+  #sidebar h2 { margin: 4px 6px; font-size: 15px; }
+  #sidebar input[type=search] { padding: 6px 8px; border: 1px solid var(--border); border-radius: 6px; background: var(--bg); color: var(--text); }
+  .btn { border: 1px solid var(--border); background: var(--bg); color: var(--text); border-radius: 6px; padding: 6px 10px; cursor: pointer; font-size: 13px; }
+  .btn:hover { background: var(--hover); }
+  #noteList { flex: 1; overflow-y: auto; }
+  .noteItem { padding: 7px 8px; border-radius: 6px; cursor: pointer; font-size: 14px; display: flex; justify-content: space-between; gap: 6px; }
+  .noteItem:hover { background: var(--hover); }
+  .noteItem.active { background: var(--active); font-weight: 600; }
+  .noteItem span.t { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .noteItem .dot { color: #f5a623; margin-left: 4px; }
+  .noteItem .del { color: var(--muted); display: none; }
+  .noteItem:hover .del { display: inline; }
+  .noteItem .del:hover { color: var(--danger); }
+  .settings { font-size: 12px; color: var(--muted); border-top: 1px solid var(--border); padding-top: 8px; display: grid; grid-template-columns: auto 1fr; gap: 6px; align-items: center; }
+  .settings select, .settings input { width: 100%; background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 4px; }
+  .hint { font-size: 11px; color: var(--muted); line-height: 1.4; }
+
+  /* Main */
+  #main { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+  #toolbar { display: flex; flex-wrap: wrap; gap: 4px; padding: 8px 12px; border-bottom: 1px solid var(--border); align-items: center; background: var(--bg); }
+  #toolbar button, #toolbar select { border: 1px solid transparent; background: none; border-radius: 4px; padding: 4px 8px; cursor: pointer; font-size: 14px; color: var(--text); }
+  #toolbar select option { background: var(--bg); color: var(--text); }
+  #toolbar button:hover, #toolbar select:hover { background: var(--hover); }
+  #toolbar .sep { width: 1px; height: 20px; background: var(--border); margin: 0 4px; }
+  #toolbar label { display: inline-flex; align-items: center; gap: 2px; font-size: 13px; cursor: pointer; }
+  #toolbar input[type=color] { width: 24px; height: 24px; padding: 0; border: none; background: none; cursor: pointer; }
+  #status { font-size: 12px; color: var(--muted); margin-right: 6px; }
+  #status.dirty { color: #f5a623; }
+  #title { border: none; outline: none; font-size: 36px; font-weight: 700; padding: 24px 48px 8px; width: 100%; max-width: 996px; color: var(--text); background: transparent; }
+  #title::placeholder { color: var(--muted); }
+  #scroll { flex: 1; overflow-y: auto; }
+  #editor { outline: none; padding: 8px 48px 120px; max-width: 900px; line-height: 1.65; font-size: 16px; min-height: 60vh; }
+
+  /* Content styles */
+  #editor h1 { font-size: 2em; margin: 1em 0 .3em; }
+  #editor h2 { font-size: 1.6em; margin: 1em 0 .3em; }
+  #editor h3 { font-size: 1.35em; margin: .9em 0 .3em; }
+  #editor h4 { font-size: 1.15em; margin: .9em 0 .3em; }
+  #editor h5 { font-size: 1em; margin: .8em 0 .3em; }
+  #editor h6 { font-size: .9em; margin: .8em 0 .3em; color: var(--muted); }
+  #editor p { margin: .35em 0; }
+  #editor blockquote { border-left: 3px solid var(--text); margin: .6em 0; padding: 2px 14px; color: var(--quote); }
+  #editor a { color: var(--accent); }
+  #editor hr { border: none; border-top: 1px solid var(--border); margin: 1em 0; }
+  #editor table { border-collapse: collapse; margin: .6em 0; }
+  #editor th, #editor td { border: 1px solid var(--border); padding: 6px 10px; }
+  #editor th { background: var(--side); }
+  #editor ul.check { list-style: none; padding-left: 4px; }
+  #editor img { max-width: 100%; }
+
+  /* Code: its own font + color (change in sidebar settings) */
+  #editor pre { background: var(--code-bg); color: var(--code-color); font-family: var(--code-font); padding: 14px 16px; border-radius: 8px; overflow-x: auto; margin: .7em 0; white-space: pre-wrap; font-size: 14px; line-height: 1.5; }
+  #editor pre code { background: none; color: inherit; font-family: inherit; padding: 0; }
+  #editor code { font-family: var(--code-font); background: var(--icode-bg); color: var(--icode-color); padding: 2px 5px; border-radius: 4px; font-size: .9em; }
+  #editor pre code { padding: 0; }
+
+  /* Modal */
+  #overlay { position: fixed; inset: 0; background: rgba(0,0,0,.5); backdrop-filter: blur(3px); display: flex; align-items: center; justify-content: center; z-index: 100; animation: fade .15s; }
+  .modal { background: var(--bg); color: var(--text); border: 1px solid var(--border); border-radius: 14px; padding: 26px; width: min(420px, 90vw); box-shadow: 0 20px 60px rgba(0,0,0,.35); text-align: center; animation: pop .18s; }
+  .modal .icon { font-size: 42px; margin-bottom: 6px; }
+  .modal h3 { margin: 4px 0 8px; font-size: 20px; }
+  .modal p { margin: 0 0 20px; color: var(--muted); font-size: 14px; line-height: 1.5; }
+  .modal .actions { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; }
+  .modal button { padding: 9px 18px; border-radius: 8px; border: 1px solid var(--border); background: var(--bg); color: var(--text); font-size: 14px; cursor: pointer; }
+  .modal button:hover { background: var(--hover); }
+  .modal button.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+  .modal button.primary:hover { filter: brightness(1.1); }
+  .modal button.danger { background: var(--danger); border-color: var(--danger); color: #fff; }
+  .modal button.danger:hover { filter: brightness(1.1); }
+  @keyframes fade { from { opacity: 0 } }
+  @keyframes pop { from { opacity: 0; transform: scale(.95) translateY(8px) } }
+
+  @media (max-width: 700px) { #sidebar { display: none; } #editor, #title { padding-left: 16px; padding-right: 16px; } }
+</style>
+</head>
+<body>
+
+<aside id="sidebar">
+  <h2>📝 MyNotes</h2>
+  <button class="btn" id="newBtn">+ New note</button>
+  <button class="btn" id="openBtn">📂 Open file (.md .txt .html)</button>
+  <input type="file" id="fileInput" accept=".md,.markdown,.txt,.html,.htm" multiple hidden>
+  <input type="search" id="search" placeholder="Search notes...">
+  <div id="noteList"></div>
+  <div class="hint">Notes live only in this tab and are erased when it closes. Download what you want to keep. <span style="color:#f5a623">●</span> = not downloaded yet.</div>
+  <div class="settings">
+    <span>Code font</span>
+    <select id="codeFont">
+      <option value='"Fira Code", Consolas, "Courier New", monospace'>Fira / Consolas</option>
+      <option value='"JetBrains Mono", Menlo, monospace'>JetBrains / Menlo</option>
+      <option value='"Courier New", monospace'>Courier New</option>
+      <option value='"Comic Sans MS", cursive'>Comic Sans</option>
+    </select>
+    <span>Code text</span><input type="color" id="codeColor" value="#a6e3a1">
+    <span>Code bg</span><input type="color" id="codeBg" value="#1e1e2e">
+  </div>
+</aside>
+
+<section id="main">
+  <div id="toolbar">
+    <select id="blockSel" title="Block type">
+      <option value="p">Paragraph</option>
+      <option value="h1">Heading 1</option><option value="h2">Heading 2</option>
+      <option value="h3">Heading 3</option><option value="h4">Heading 4</option>
+      <option value="h5">Heading 5</option><option value="h6">Heading 6</option>
+      <option value="pre">Code block</option>
+      <option value="blockquote">Quote</option>
+    </select>
+    <span class="sep"></span>
+    <button data-cmd="bold" title="Bold (Ctrl+B)"><b>B</b></button>
+    <button data-cmd="italic" title="Italic (Ctrl+I)"><i>I</i></button>
+    <button data-cmd="underline" title="Underline (Ctrl+U)"><u>U</u></button>
+    <button data-cmd="strikeThrough" title="Strikethrough"><s>S</s></button>
+    <button id="inlineCode" title="Inline code">&lt;/&gt;</button>
+    <span class="sep"></span>
+    <label title="Text color">A<input type="color" id="fgColor" value="#e03e3e"></label>
+    <label title="Highlight">🖍<input type="color" id="bgColor" value="#fbf3db"></label>
+    <span class="sep"></span>
+    <button data-cmd="insertUnorderedList" title="Bullet list">• List</button>
+    <button data-cmd="insertOrderedList" title="Numbered list">1. List</button>
+    <button id="checklist" title="Checklist">☑ Todo</button>
+    <span class="sep"></span>
+    <button data-cmd="justifyLeft" title="Align left">⇤</button>
+    <button data-cmd="justifyCenter" title="Center">↔</button>
+    <button data-cmd="justifyRight" title="Align right">⇥</button>
+    <span class="sep"></span>
+    <button id="linkBtn" title="Link">🔗</button>
+    <button id="hrBtn" title="Divider">―</button>
+    <button id="tableBtn" title="Table">▦</button>
+    <button data-cmd="removeFormat" title="Clear formatting">⌫ Clear</button>
+    <button data-cmd="undo" title="Undo">↶</button>
+    <button data-cmd="redo" title="Redo">↷</button>
+    <span style="flex:1"></span>
+    <span id="status"></span>
+    <button id="themeBtn" title="Toggle dark / light mode">🌙</button>
+    <select id="exportSel" title="Download current note">
+      <option value="">⬇ Download as…</option>
+      <option value="md">Markdown (.md)</option>
+      <option value="txt">Plain text (.txt)</option>
+      <option value="html">HTML (.html)</option>
+    </select>
+  </div>
+  <div id="scroll">
+    <input id="title" placeholder="Untitled">
+    <div id="editor" contenteditable="true" spellcheck="true"></div>
+  </div>
+</section>
+
+<script>
+const $ = s => document.querySelector(s);
+const editor = $('#editor'), titleEl = $('#title');
+
+/* ---------- storage: sessionStorage = wiped automatically when the tab/browser closes ---------- */
+const KEY = 'mynotes.session';
+try { localStorage.removeItem('mynotes.v1'); } catch {}      // clean up notes from the older version
+let notes = JSON.parse(sessionStorage.getItem(KEY) || '[]');
+let currentId = null;
+
+const save = () => sessionStorage.setItem(KEY, JSON.stringify(notes));
+const uid = () => Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+const cur = () => notes.find(n => n.id === currentId);
+const anyDirty = () => notes.some(n => n.dirty);
+
+function newNote(title = '', html = '<p><br></p>') {
+  const n = { id: uid(), title, html, updated: Date.now(), dirty: false };
+  notes.unshift(n); save(); openNote(n.id); return n;
+}
+function openNote(id) {
+  currentId = id; const n = cur();
+  titleEl.value = n.title; editor.innerHTML = n.html;
+  renderList();
+}
+function persist() {
+  const n = cur(); if (!n) return;
+  n.title = titleEl.value; n.html = editor.innerHTML; n.updated = Date.now();
+  save(); renderList();
+}
+let timer;
+function persistSoon() {                       // called on every edit
+  const n = cur(); if (n) n.dirty = true;
+  clearTimeout(timer); timer = setTimeout(persist, 400);
+  updateStatus();
+}
+function updateStatus() {
+  const s = $('#status'), c = notes.filter(n => n.dirty).length;
+  s.textContent = c ? `● ${c} not downloaded` : '✓ nothing pending';
+  s.className = c ? 'dirty' : '';
+}
+
+function renderList() {
+  const q = $('#search').value.toLowerCase();
+  const list = $('#noteList'); list.innerHTML = '';
+  notes.filter(n => (n.title + ' ' + n.html).toLowerCase().includes(q)).forEach(n => {
+    const d = document.createElement('div');
+    d.className = 'noteItem' + (n.id === currentId ? ' active' : '');
+    d.innerHTML = `<span class="t"></span><span><span class="dot"></span><span class="del" title="Delete">✕</span></span>`;
+    d.querySelector('.t').textContent = n.title || 'Untitled';
+    d.querySelector('.dot').textContent = n.dirty ? '●' : '';
+    d.onclick = () => { persist(); openNote(n.id); };
+    d.querySelector('.del').onclick = async e => {
+      e.stopPropagation();
+      const r = await modal({
+        icon: '🗑️', title: 'Delete this note?',
+        text: `"${n.title || 'Untitled'}" will be removed permanently${n.dirty ? ' and you haven\'t downloaded it yet' : ''}.`,
+        actions: [{ key: 'cancel', label: 'Cancel' }, { key: 'delete', label: 'Delete', cls: 'danger' }]
+      });
+      if (r !== 'delete') return;
+      notes = notes.filter(x => x.id !== n.id); save();
+      if (currentId === n.id) notes.length ? openNote(notes[0].id) : newNote(); else renderList();
+      updateStatus();
+    };
+    list.appendChild(d);
+  });
+}
+
+/* ---------- styled modal ---------- */
+function modal({ icon, title, text, actions }) {
+  return new Promise(resolve => {
+    if ($('#overlay')) return resolve('cancel');
+    const o = document.createElement('div'); o.id = 'overlay';
+    o.innerHTML = `<div class="modal" role="dialog" aria-modal="true">
+      <div class="icon">${icon}</div><h3></h3><p></p><div class="actions"></div></div>`;
+    o.querySelector('h3').textContent = title;
+    o.querySelector('p').textContent = text;
+    const done = v => { o.remove(); document.removeEventListener('keydown', esc); resolve(v); };
+    const esc = e => { if (e.key === 'Escape') done('cancel'); };
+    actions.forEach(a => {
+      const b = document.createElement('button');
+      b.textContent = a.label; if (a.cls) b.className = a.cls;
+      b.onclick = () => done(a.key); o.querySelector('.actions').appendChild(b);
+    });
+    document.addEventListener('keydown', esc);
+    document.body.appendChild(o);
+    (o.querySelector('.primary, .danger') || o.querySelector('button')).focus();
+  });
+}
+
+/* ---------- theme ---------- */
+function setTheme(t) {
+  document.documentElement.dataset.theme = t;
+  $('#themeBtn').textContent = t === 'dark' ? '☀️' : '🌙';
+  try { localStorage.setItem('mynotes.theme', t); } catch {}
+}
+setTheme((() => { try { return localStorage.getItem('mynotes.theme'); } catch {} })()
+  || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
+$('#themeBtn').onclick = () => setTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
+
+/* ---------- toolbar ---------- */
+document.querySelectorAll('[data-cmd]').forEach(b => {
+  b.onmousedown = e => e.preventDefault();
+  b.onclick = () => { editor.focus(); document.execCommand(b.dataset.cmd); persistSoon(); };
+});
+$('#blockSel').onchange = e => { editor.focus(); document.execCommand('formatBlock', false, e.target.value); persistSoon(); };
+$('#fgColor').oninput = e => { editor.focus(); document.execCommand('styleWithCSS', false, true); document.execCommand('foreColor', false, e.target.value); persistSoon(); };
+$('#bgColor').oninput = e => { editor.focus(); document.execCommand('styleWithCSS', false, true); document.execCommand('hiliteColor', false, e.target.value); persistSoon(); };
+$('#inlineCode').onmousedown = e => e.preventDefault();
+$('#inlineCode').onclick = () => {
+  const sel = getSelection(); if (!sel.rangeCount || sel.isCollapsed) return;
+  const t = sel.toString().replace(/&/g, '&amp;').replace(/</g, '&lt;');
+  document.execCommand('insertHTML', false, `<code>${t}</code>&#8203;`); persistSoon();
+};
+$('#checklist').onclick = () => { editor.focus(); document.execCommand('insertHTML', false, '<ul class="check"><li>☐ </li></ul>'); persistSoon(); };
+$('#linkBtn').onmousedown = e => e.preventDefault();
+$('#linkBtn').onclick = () => { const u = prompt('URL:'); if (u) { editor.focus(); document.execCommand('createLink', false, u); persistSoon(); } };
+$('#hrBtn').onclick = () => { editor.focus(); document.execCommand('insertHorizontalRule'); persistSoon(); };
+$('#tableBtn').onclick = () => {
+  const r = +prompt('Rows?', 3), c = +prompt('Columns?', 3); if (!r || !c) return;
+  let h = '<table>'; for (let i = 0; i < r; i++) { h += '<tr>'; for (let j = 0; j < c; j++) h += (i ? '<td><br></td>' : '<th><br></th>'); h += '</tr>'; }
+  editor.focus(); document.execCommand('insertHTML', false, h + '</table><p><br></p>'); persistSoon();
+};
+
+document.addEventListener('selectionchange', () => {
+  const sel = getSelection(); if (!sel.anchorNode || !editor.contains(sel.anchorNode)) return;
+  let el = sel.anchorNode.nodeType === 3 ? sel.anchorNode.parentElement : sel.anchorNode;
+  while (el && el !== editor && !/^(P|H[1-6]|PRE|BLOCKQUOTE|DIV|LI)$/.test(el.tagName)) el = el.parentElement;
+  const t = el && el.tagName.toLowerCase();
+  $('#blockSel').value = /^(h[1-6]|pre|blockquote)$/.test(t) ? t : 'p';
+});
+
+editor.addEventListener('click', e => {
+  const li = e.target.closest('ul.check li'); if (!li) return;
+  const r = document.caretRangeFromPoint(e.clientX, e.clientY);
+  if (r && r.startContainer.nodeType === 3 && r.startOffset <= 1) {
+    li.firstChild.nodeValue = li.firstChild.nodeValue.replace(/^[☐☑]/, c => c === '☐' ? '☑' : '☐'); persistSoon();
+  }
+});
+
+/* ---------- paste: keep formatting, clean the junk ---------- */
+const lum = c => { const m = c.match(/\d+(\.\d+)?/g); if (!m) return 0.5; const [r, g, b] = m.map(Number); return (0.299 * r + 0.587 * g + 0.114 * b) / 255; };
+function cleanHTML(html) {
+  const doc = new DOMParser().parseFromString(html, 'text/html');
+  doc.querySelectorAll('script,style,meta,link,title,iframe,object').forEach(n => n.remove());
+  doc.querySelectorAll('pre').forEach(pre => {
+    const lang = (pre.querySelector('code[class*=language-]')?.className.match(/language-(\w+)/) || [])[1];
+    const code = doc.createElement('code'); code.textContent = pre.textContent.replace(/\n$/, '');
+    if (lang) code.className = 'language-' + lang;
+    const p = doc.createElement('pre'); p.appendChild(code); pre.replaceWith(p);
+  });
+  doc.querySelectorAll('code').forEach(c => { if (!c.closest('pre')) { c.removeAttribute('style'); c.removeAttribute('class'); } });
+  doc.body.querySelectorAll('*').forEach(el => {
+    if (el.closest('pre')) return;
+    el.removeAttribute('class'); el.removeAttribute('id');
+    const s = el.style, keep = {};
+    ['color', 'fontWeight', 'fontStyle', 'textDecoration', 'textAlign'].forEach(k => { if (s[k]) keep[k] = s[k]; });
+    // near-black / near-white = the source site's default text color -> let our theme decide
+    if (keep.color && (lum(keep.color) > 0.85 || lum(keep.color) < 0.15)) delete keep.color;
+    if (s.backgroundColor && lum(s.backgroundColor) < 0.97 && lum(s.backgroundColor) > 0.1 && !['TABLE', 'TD', 'TH', 'TR'].includes(el.tagName)) keep.backgroundColor = s.backgroundColor;
+    el.removeAttribute('style'); Object.assign(el.style, keep);
+    if (!el.getAttribute('style')) el.removeAttribute('style');
+  });
+  return doc.body.innerHTML;
+}
+editor.addEventListener('paste', e => {
+  const html = e.clipboardData.getData('text/html');
+  if (!html) return;
+  e.preventDefault();
+  document.execCommand('insertHTML', false, cleanHTML(html));
+  persistSoon();
+});
+
+/* ---------- download ---------- */
+const td = new TurndownService({ headingStyle: 'atx', codeBlockStyle: 'fenced', bulletListMarker: '-' });
+td.use(turndownPluginGfm.gfm);
+td.addRule('pre', {
+  filter: 'pre',
+  replacement: (_, node) => {
+    const lang = (node.querySelector('code')?.className.match(/language-(\w+)/) || [])[1] || '';
+    return `\n\n\`\`\`${lang}\n${node.textContent.replace(/\n$/, '')}\n\`\`\`\n\n`;
+  }
+});
+td.addRule('check', {
+  filter: n => n.nodeName === 'LI' && n.parentElement?.classList.contains('check'),
+  replacement: (c) => '- [' + (c.trim().startsWith('☑') ? 'x' : ' ') + '] ' + c.trim().replace(/^[☐☑]\s*/, '') + '\n'
+});
+function download(name, text, type) {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([text], { type }));
+  a.download = name; a.click(); URL.revokeObjectURL(a.href);
+}
+function exportNote(f) {
+  persist();
+  const title = titleEl.value.trim() || 'Untitled', safe = title.replace(/[\\/:*?"<>|]/g, '_');
+  if (f === 'md')   download(safe + '.md', `# ${title}\n\n` + td.turndown(editor.innerHTML), 'text/markdown');
+  if (f === 'txt')  download(safe + '.txt', title + '\n\n' + editor.innerText, 'text/plain');
+  if (f === 'html') download(safe + '.html', `<!DOCTYPE html><meta charset="utf-8"><title>${title}</title><body><h1>${title}</h1>${editor.innerHTML}</body>`, 'text/html');
+  const n = cur(); if (n) { n.dirty = false; save(); renderList(); updateStatus(); }
+}
+$('#exportSel').onchange = e => { const f = e.target.value; e.target.value = ''; if (f) exportNote(f); };
+
+/* ---------- open existing files ---------- */
+$('#openBtn').onclick = () => $('#fileInput').click();
+$('#fileInput').onchange = async e => {
+  for (const file of e.target.files) {
+    const text = await file.text(), name = file.name.replace(/\.[^.]+$/, ''), ext = file.name.split('.').pop().toLowerCase();
+    let html;
+    if (ext === 'html' || ext === 'htm') html = cleanHTML(text);
+    else if (ext === 'txt') html = text.split(/\n{2,}/).map(p => '<p>' + p.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/\n/g, '<br>') + '</p>').join('');
+    else html = cleanHTML(marked.parse(text));
+    persist(); newNote(name, html);
+  }
+  e.target.value = ''; updateStatus();
+};
+
+/* ---------- code appearance (preferences only, not note data) ---------- */
+function applyCode() {
+  const r = document.documentElement.style;
+  r.setProperty('--code-font', $('#codeFont').value);
+  r.setProperty('--code-color', $('#codeColor').value);
+  r.setProperty('--code-bg', $('#codeBg').value);
+  try { localStorage.setItem('mynotes.code', JSON.stringify({ f: $('#codeFont').value, c: $('#codeColor').value, b: $('#codeBg').value })); } catch {}
+}
+try { const s = JSON.parse(localStorage.getItem('mynotes.code')); if (s) { $('#codeFont').value = s.f; $('#codeColor').value = s.c; $('#codeBg').value = s.b; } } catch {}
+['codeFont', 'codeColor', 'codeBg'].forEach(i => $('#' + i).oninput = applyCode); applyCode();
+
+/* ---------- leaving the page ---------- */
+window.addEventListener('beforeunload', e => {
+  persist();
+  if (!anyDirty()) return;
+  e.preventDefault(); e.returnValue = '';              // browser's own "Leave site?" prompt (cannot be restyled)
+  // If the user picks "Stay", this runs afterwards and shows our friendlier box.
+  setTimeout(async () => {
+    const c = notes.filter(n => n.dirty).length;
+    const r = await modal({
+      icon: '⚠️', title: 'You might lose unsaved work',
+      text: `${c} note${c > 1 ? 's' : ''} ${c > 1 ? 'haven\'t' : 'hasn\'t'} been downloaded. Notes are erased when this tab closes.`,
+      actions: [{ key: 'stay', label: 'Keep editing' }, { key: 'md', label: '⬇ Download this note (.md)', cls: 'primary' }]
+    });
+    if (r === 'md') exportNote('md');
+  }, 300);
+});
+
+/* ---------- misc ---------- */
+editor.addEventListener('input', persistSoon);
+titleEl.addEventListener('input', persistSoon);
+$('#search').oninput = renderList;
+$('#newBtn').onclick = () => { persist(); newNote(); titleEl.focus(); updateStatus(); };
+document.addEventListener('keydown', e => { if ((e.ctrlKey || e.metaKey) && e.key === 's') { e.preventDefault(); exportNote('md'); } });
+
+notes.length ? openNote(notes[0].id) : newNote('Welcome', '<h1>Welcome 👋</h1><p>Start typing. Paste from ChatGPT, Claude or any site and the formatting stays.</p><pre><code>print("code blocks have their own font and color")</code></pre>');
+updateStatus();
+</script>
+</body>
+</html>
