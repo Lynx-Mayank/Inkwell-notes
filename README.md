@@ -1,4 +1,4 @@
-# 🖋️ Inkwell
+#  Inkwell
 
 **A private, Notion-style note editor that runs entirely in your browser.** No sign-up, no backend, no AI, and no data leaving your machine. Notes live only for the length of your session and vanish when you close the tab, so download what you want to keep.
 
